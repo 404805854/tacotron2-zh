@@ -163,7 +163,7 @@ default = HParams(
     postnet_n_convolutions=5,  # 2, #5,
 
 
-    # Alternative Attention Modules by ZJ
+    # Alternative Attention Modules 
     attention_mode=["default", "GMM", "FA", "SMA", "DCA", "GMM_Evo"][2],
     # GMM Attention parameters
     gmm_kernel=5,

@@ -101,23 +101,21 @@ griffin_lim_hp = HParams(
     ###########################################################################################################################################
 )
 
-diy_size, batch_size = 128, 40
-# diy_size, batch_size = 384, 32
+diy_size, batch_size = [(96, 48), (128, 40), (256, 36), (384, 32)][1]
 
 
 # Default hyperparameters
 default = HParams(
     input="./test.txt",
-    # input="./test2num.txt",
     output="./output",
     epochs=100,
     epochs_per_checkpoint=5,
     data_loader_workers=2,
     batch_size=batch_size,
 
-    datasets="BZNSYP|AISHELL3",
+    datasets="|".join(["BZNSYP", "AISHELL3"]),
     training_files="./data/metadata.csv",
-    validation_files="./data/val_metadata.csv",
+    validation_files="",
 
     text_cleaners="basic_cleaners",
     sampling_rate=griffin_lim_hp.sample_rate,
@@ -163,7 +161,7 @@ default = HParams(
     postnet_n_convolutions=5,  # 2, #5,
 
 
-    # Alternative Attention Modules 
+    # Alternative Attention Modules
     attention_mode=["default", "GMM", "FA", "SMA", "DCA", "GMM_Evo"][2],
     # GMM Attention parameters
     gmm_kernel=5,

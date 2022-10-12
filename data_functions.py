@@ -37,8 +37,8 @@ def get_collate_function(n_frames_per_step=1):
     return collate_fn
 
 
-def get_data_loader(dataset_path, audiopaths_and_text, args):
-    data_loader = TextMelLoader(dataset_path, audiopaths_and_text, args)
+def get_data_loader(audiopaths_and_text, args):
+    data_loader = TextMelLoader(audiopaths_and_text, args)
     return data_loader
 
 

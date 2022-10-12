@@ -63,17 +63,17 @@ def load_wav_to_torch(full_path):
     return torch.FloatTensor(data.astype(np.float32)), sampling_rate
 
 
-def load_filepaths_and_text(dataset_path, filename, split="|"):
+def load_filepaths_and_text(filename, split="|"):
     with open(filename, encoding='utf-8') as f:
-        def split_line(root, line):
+        def split_line(line):
             parts = line.strip().split(split)
             if len(parts) < 2:
                 raise Exception(
                     "incorrect line format for file: {}".format(filename))
-            path = os.path.join(root, parts[0])
+            path = parts[0]
             text = parts[-1]
             return path, text
-        filepaths_and_text = [split_line(dataset_path, line) for line in f]
+        filepaths_and_text = [split_line(line) for line in f]
     return filepaths_and_text
 
 

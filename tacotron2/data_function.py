@@ -32,14 +32,16 @@ import tacotron2_common.layers as layers
 from tacotron2_common.utils import load_wav_to_torch, load_filepaths_and_text, to_gpu
 from tacotron2.text import text_to_sequence
 
+
 class TextMelLoader(torch.utils.data.Dataset):
     """
         1) loads audio,text pairs
         2) normalizes text and converts them to sequences of one-hot vectors
         3) computes mel-spectrograms from audio files.
     """
-    def __init__(self, dataset_path, audiopaths_and_text, args):
-        self.audiopaths_and_text = load_filepaths_and_text(dataset_path, audiopaths_and_text)
+
+    def __init__(self, audiopaths_and_text, args):
+        self.audiopaths_and_text = load_filepaths_and_text(audiopaths_and_text)
         self.text_cleaners = args.text_cleaners
         self.max_wav_value = args.max_wav_value
         self.sampling_rate = args.sampling_rate
@@ -65,7 +67,8 @@ class TextMelLoader(torch.utils.data.Dataset):
                     sampling_rate, self.stft.sampling_rate))
             audio_norm = audio / self.max_wav_value
             audio_norm = audio_norm.unsqueeze(0)
-            audio_norm = torch.autograd.Variable(audio_norm, requires_grad=False)
+            audio_norm = torch.autograd.Variable(
+                audio_norm, requires_grad=False)
             melspec = self.stft.mel_spectrogram(audio_norm)
             melspec = torch.squeeze(melspec, 0)
         else:
@@ -90,6 +93,7 @@ class TextMelLoader(torch.utils.data.Dataset):
 class TextMelCollate():
     """ Zero-pads model inputs and targets based on number of frames per setep
     """
+
     def __init__(self, n_frames_per_step):
         self.n_frames_per_step = n_frames_per_step
 
@@ -115,7 +119,8 @@ class TextMelCollate():
         num_mels = batch[0][1].size(0)
         max_target_len = max([x[1].size(1) for x in batch])
         if max_target_len % self.n_frames_per_step != 0:
-            max_target_len += self.n_frames_per_step - max_target_len % self.n_frames_per_step
+            max_target_len += self.n_frames_per_step - \
+                max_target_len % self.n_frames_per_step
             assert max_target_len % self.n_frames_per_step == 0
 
         # include mel padded and gate padded
@@ -135,6 +140,7 @@ class TextMelCollate():
         len_x = torch.Tensor(len_x)
         return text_padded, input_lengths, mel_padded, gate_padded, \
             output_lengths, len_x
+
 
 def batch_to_gpu(batch):
     text_padded, input_lengths, mel_padded, gate_padded, \

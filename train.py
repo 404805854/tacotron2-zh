@@ -63,8 +63,6 @@ def parse_args(parser):
 
     parser.add_argument('-o', '--output', type=str, required=True,
                         help='Directory to save checkpoints')
-    parser.add_argument('-d', '--dataset-path', type=str,
-                        default='./', help='Path to dataset')
     parser.add_argument('--data-loader-workers', type=int, default=1,
                         help='data loader worker num')
     parser.add_argument('-m', '--model-name', type=str, default='', required=True,
@@ -424,6 +422,9 @@ def validate(model, criterion, valset, epoch, batch_iter, batch_size,
             val_items_per_sec += items_per_sec
             num_iters += 1
 
+        if num_iters == 0:
+            return None, None
+
         val_loss = val_loss/num_iters
         val_items_per_sec = val_items_per_sec/num_iters
 
@@ -578,8 +579,7 @@ def main():
 
     collate_fn = data_functions.get_collate_function(
         n_frames_per_step)
-    trainset = data_functions.get_data_loader(
-        args.dataset_path, args.training_files, args)
+    trainset = data_functions.get_data_loader(args.training_files, args)
     if distributed_run:
         train_sampler = DistributedSampler(trainset, seed=(args.seed or 0))
         shuffle = False
@@ -592,14 +592,14 @@ def main():
                               batch_size=args.batch_size, pin_memory=False,
                               drop_last=True, collate_fn=collate_fn)
 
-    valset = data_functions.get_data_loader(
-        args.dataset_path, args.validation_files, args)
+    if args.validation_files != "":
+        valset = data_functions.get_data_loader(args.validation_files, args)
+        val_loss = 0.0
 
     batch_to_gpu = data_functions.get_batch_to_gpu()
 
     iteration = 0
     train_epoch_items_per_sec = 0.0
-    val_loss = 0.0
     num_iters = 0
 
     model.train()
@@ -691,12 +691,13 @@ def main():
         DLLogger.log(step=(epoch,), data={'train_loss': reduced_loss})
         DLLogger.log(step=(epoch,), data={'train_epoch_time': epoch_time})
 
-        val_loss, val_items_per_sec = validate(model, criterion, valset, epoch,
-                                               iteration, args.batch_size,
-                                               world_size, collate_fn,
-                                               distributed_run, args.bench_class == "perf-train",
-                                               batch_to_gpu,
-                                               args.amp)
+        if args.validation_files != "":
+            val_loss, val_items_per_sec = validate(model, criterion, valset, epoch,
+                                                   iteration, args.batch_size,
+                                                   world_size, collate_fn,
+                                                   distributed_run, args.bench_class == "perf-train",
+                                                   batch_to_gpu,
+                                                   args.amp)
 
         from hparams import default
         save_last_checkpoint(model, optimizer, scaler, epoch, model_config,
@@ -713,11 +714,12 @@ def main():
     run_stop_time = time.perf_counter()
     run_time = run_stop_time - run_start_time
     DLLogger.log(step=tuple(), data={'run_time': run_time})
-    DLLogger.log(step=tuple(), data={'val_loss': val_loss})
     DLLogger.log(step=tuple(), data={'train_loss': reduced_loss})
     DLLogger.log(step=tuple(), data={'train_items_per_sec':
                                      (train_epoch_items_per_sec/num_iters if num_iters > 0 else 0.0)})
-    DLLogger.log(step=tuple(), data={'val_items_per_sec': val_items_per_sec})
+    if args.validation_files != "":
+        DLLogger.log(step=tuple(), data={'val_loss': val_loss})
+        DLLogger.log(step=tuple(), data={'val_items_per_sec': val_items_per_sec})
 
     if local_rank == 0:
         DLLogger.flush()

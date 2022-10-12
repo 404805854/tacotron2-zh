@@ -154,11 +154,12 @@ def pad_sequences(batch):
 
 
 def prepare_input_sequence(texts, default, cpu_run=False):
+    from merge_metadata import normalize
 
     d = []
     for i, text in enumerate(texts):
         d.append(torch.IntTensor(
-            text_to_sequence(text, [default.text_cleaners])[:]))
+            text_to_sequence(normalize(text), [default.text_cleaners])[:]))
 
     text_padded, input_lengths = pad_sequences(d)
     if not cpu_run:
@@ -236,7 +237,6 @@ def main():
         texts, default, args.cpu)
     DLLogger.log(step="infer", data={
         'sequences_padded': str(sequences_padded.cpu())})
-
 
     with torch.no_grad(), MeasureTime(measurements, "tacotron2_time", args.cpu):
         mels, mel_lengths, alignments = tacotron2.infer(

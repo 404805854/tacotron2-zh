@@ -20,6 +20,23 @@ def parse_args(parser):
     return parser
 
 
+_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890<># '
+
+
+def normalize(str, trans_prosody=True, remove_punc=True):
+    if trans_prosody:
+        str = str.replace("# # # #", "# # #").replace("# # #", "#@").replace("# #", "#").replace("#@", "# # #")
+    if remove_punc:
+        arr = list(str)
+        clean = []
+        for iter in arr:
+            if iter in _letters:
+                clean.append(iter)
+        return "".join(clean)
+    else:
+        return str
+
+
 def main():
     parser = argparse.ArgumentParser(
         description='merge datasets metadata')
@@ -47,6 +64,7 @@ def main():
                     for line in tqdm(lines):
                         arr = line.strip().split("|")
                         arr[0] = os.path.abspath(os.path.join(dataset, arr[0]))
+                        arr[-1] = normalize(arr[-1])
                         training_data.append("|".join(arr)+"\n")
 
         if args.validation_files != "":
@@ -63,6 +81,7 @@ def main():
                             arr = line.strip().split("|")
                             arr[0] = os.path.abspath(
                                 os.path.join(dataset, arr[0]))
+                            arr[-1] = normalize(arr[-1])
                             validation_data.append("|".join(arr)+"\n")
     with open(args.training_files, "w", encoding="utf8") as ofile:
         for line in tqdm(training_data):

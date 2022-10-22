@@ -20,7 +20,7 @@ symbols = [_pad] + list(_special) + list(_punctuation) + list(_letters) + _arpab
 '''
 _pad = '_'
 _eos = '~'
-_punctuation = '!\',.;?#<> '
+_punctuation = ',.?!;\'"#<> '
 _letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890'
 
 symbols = [_pad, _eos] + list(_letters) + list(_punctuation)

@@ -200,6 +200,7 @@ def init_distributed(args, world_size, rank, group_name):
     print("Done initializing distributed")
 
 
+@torch.no_grad()
 def infer(model, default):
     texts = []
     try:
@@ -719,7 +720,8 @@ def main():
                                      (train_epoch_items_per_sec/num_iters if num_iters > 0 else 0.0)})
     if args.validation_files != "":
         DLLogger.log(step=tuple(), data={'val_loss': val_loss})
-        DLLogger.log(step=tuple(), data={'val_items_per_sec': val_items_per_sec})
+        DLLogger.log(step=tuple(), data={
+                     'val_items_per_sec': val_items_per_sec})
 
     if local_rank == 0:
         DLLogger.flush()

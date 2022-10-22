@@ -607,27 +607,40 @@ class Encoder(nn.Module):
     """
 
     def __init__(self, encoder_n_convolutions,
-                 encoder_embedding_dim, encoder_kernel_size):
+                 symbols_embedding_dim, encoder_kernel_size):
         super(Encoder, self).__init__()
 
         convolutions = []
-        for _ in range(encoder_n_convolutions):
+        for _ in range(encoder_n_convolutions - 1):
             conv_layer = nn.Sequential(
-                ConvNorm(encoder_embedding_dim,
-                         encoder_embedding_dim,
+                ConvNorm(symbols_embedding_dim,
+                         symbols_embedding_dim,
                          kernel_size=encoder_kernel_size, stride=1,
                          padding=int((encoder_kernel_size - 1) / 2),
                          dilation=1, w_init_gain='relu'),
-                nn.BatchNorm1d(encoder_embedding_dim))
+                nn.BatchNorm1d(symbols_embedding_dim))
             convolutions.append(conv_layer)
+
+        conv_layer = nn.Sequential(
+            ConvNorm(symbols_embedding_dim,
+                     hparams.encoder_embedding_dim,
+                     kernel_size=encoder_kernel_size, stride=1,
+                     padding=int((encoder_kernel_size - 1) / 2),
+                     dilation=1, w_init_gain='relu'),
+            nn.BatchNorm1d(hparams.encoder_embedding_dim))
+        convolutions.append(conv_layer)
+
         self.convolutions = nn.ModuleList(convolutions)
 
-        self.lstm = nn.LSTM(encoder_embedding_dim,
-                            int(encoder_embedding_dim / 2), 1,
+        self.lstm = nn.LSTM(hparams.encoder_embedding_dim,
+                            int(hparams.encoder_embedding_dim / 2), 1,
                             batch_first=True, bidirectional=True)
 
+        self.spk_embedding_tf_layer = LinearNorm(
+            512, hparams.spk_embedding_dim, w_init_gain='tanh')
+
     @torch.jit.ignore
-    def forward(self, x, input_lengths):
+    def forward(self, x, input_lengths, spk_embeddings):
         for conv in self.convolutions:
             x = F.dropout(F.relu(conv(x)), 0.5, self.training)
 
@@ -644,10 +657,15 @@ class Encoder(nn.Module):
         outputs, _ = nn.utils.rnn.pad_packed_sequence(
             outputs, batch_first=True)
 
-        return outputs
+        spk_embeddings_trans = self.spk_embedding_tf_layer(
+            spk_embeddings).unsqueeze(1).expand(-1, outputs.size(1), -1)
+
+        final_outputs = torch.cat([outputs, spk_embeddings_trans], dim=-1)
+
+        return final_outputs
 
     @torch.jit.export
-    def infer(self, x, input_lengths):
+    def infer(self, x, input_lengths, spk_embeddings):
         device = x.device
         for conv in self.convolutions:
             x = F.dropout(F.relu(conv(x.to(device))), 0.5, self.training)
@@ -663,7 +681,12 @@ class Encoder(nn.Module):
         outputs, _ = nn.utils.rnn.pad_packed_sequence(
             outputs, batch_first=True)
 
-        return outputs
+        spk_embeddings_trans = self.spk_embedding_tf_layer(
+            spk_embeddings).unsqueeze(1).expand(-1, outputs.size(1), -1)
+
+        final_outputs = torch.cat([outputs, spk_embeddings_trans], dim=-1)
+
+        return final_outputs
 
 
 class Decoder(nn.Module):
@@ -1135,10 +1158,10 @@ class Tacotron2(nn.Module):
         val = sqrt(3.0) * std  # uniform bounds for std
         self.embedding.weight.data.uniform_(-val, val)
         self.encoder = Encoder(encoder_n_convolutions,
-                               encoder_embedding_dim,
+                               symbols_embedding_dim,
                                encoder_kernel_size)
         self.decoder = Decoder(n_mel_channels, n_frames_per_step,
-                               encoder_embedding_dim, attention_dim,
+                               encoder_embedding_dim + hparams.spk_embedding_dim, attention_dim,
                                attention_location_n_filters,
                                attention_location_kernel_size,
                                attention_rnn_dim, decoder_rnn_dim,
@@ -1178,12 +1201,13 @@ class Tacotron2(nn.Module):
         return outputs
 
     def forward(self, inputs):
-        inputs, input_lengths, targets, max_len, output_lengths = inputs
+        inputs, input_lengths, targets, max_len, output_lengths, spk_embeddings = inputs
         input_lengths, output_lengths = input_lengths.data, output_lengths.data
 
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
 
-        encoder_outputs = self.encoder(embedded_inputs, input_lengths)
+        encoder_outputs = self.encoder(
+            embedded_inputs, input_lengths, spk_embeddings)
 
         mel_outputs, gate_outputs, alignments = self.decoder(
             encoder_outputs, targets, memory_lengths=input_lengths)
@@ -1195,10 +1219,11 @@ class Tacotron2(nn.Module):
             [mel_outputs, mel_outputs_postnet, gate_outputs, alignments],
             output_lengths)
 
-    def infer(self, inputs, input_lengths):
+    def infer(self, inputs, input_lengths, spk_embeddings):
 
         embedded_inputs = self.embedding(inputs).transpose(1, 2)
-        encoder_outputs = self.encoder.infer(embedded_inputs, input_lengths)
+        encoder_outputs = self.encoder.infer(
+            embedded_inputs, input_lengths, spk_embeddings)
         mel_outputs, gate_outputs, alignments, mel_lengths = self.decoder.infer(
             encoder_outputs, input_lengths)
 

@@ -67,12 +67,13 @@ def load_filepaths_and_text(filename, split="|"):
     with open(filename, encoding='utf-8') as f:
         def split_line(line):
             parts = line.strip().split(split)
-            if len(parts) < 2:
+            if len(parts) < 3:
                 raise Exception(
                     "incorrect line format for file: {}".format(filename))
-            path = parts[0]
+            spk_info = parts[0]
+            path = parts[1]
             text = parts[-1]
-            return path, text
+            return path, text, spk_info
         filepaths_and_text = [split_line(line) for line in f]
     return filepaths_and_text
 

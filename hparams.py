@@ -101,7 +101,8 @@ griffin_lim_hp = HParams(
     ###########################################################################################################################################
 )
 
-diy_size, batch_size = [(96, 48), (128, 40), (256, 36), (384, 32)][1]
+diy_size, batch_size = [(96, 42), (128, 36), (256, 32), (384, 28)][1]
+spk_embedding_dim = 96
 
 
 # Default hyperparameters
@@ -115,7 +116,7 @@ default = HParams(
 
     datasets="|".join(["BZNSYP", "AISHELL3"]),
     training_files="./data/metadata.csv",
-    validation_files="",
+    validation_files="./data/val_metadata.csv",
 
     text_cleaners="basic_cleaners",
     sampling_rate=griffin_lim_hp.sample_rate,
@@ -138,11 +139,11 @@ default = HParams(
     encoder_kernel_size=5,
     encoder_n_convolutions=3,
     encoder_embedding_dim=diy_size,  # 192, #384,
-    # spk_embedding_dim=96,
+    spk_embedding_dim=spk_embedding_dim,
 
     # Decoder parameters
     n_frames_per_step=1,
-    decoder_rnn_dim=diy_size,  # 288, #480,
+    decoder_rnn_dim=diy_size+spk_embedding_dim,  # 288, #480,
     prenet_dim=256,
     max_decoder_steps=1000,
     gate_threshold=0.5,
@@ -151,7 +152,7 @@ default = HParams(
 
     # Attention
     attention_dim=128,
-    attention_rnn_dim=diy_size,
+    attention_rnn_dim=diy_size+spk_embedding_dim,
     attention_location_n_filters=32,
     attention_location_kernel_size=31,
 

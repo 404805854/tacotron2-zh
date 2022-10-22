@@ -53,11 +53,15 @@ class TextMelLoader(torch.utils.data.Dataset):
 
     def get_mel_text_pair(self, audiopath_and_text):
         # separate filename and text
-        audiopath, text = audiopath_and_text[0], audiopath_and_text[1]
+        audiopath, text, spk_path = audiopath_and_text[0], audiopath_and_text[1], audiopath_and_text[2]
         len_text = len(text)
         text = self.get_text(text)
         mel = self.get_mel(audiopath)
-        return (text, mel, len_text)
+        spk_info = self.get_spk_info(spk_path)
+        return (text, mel, len_text, spk_info)
+
+    def get_spk_info(self, spk_path):
+        return torch.load(spk_path, map_location=torch.device('cpu'))
 
     def get_mel(self, filename):
         if not self.load_mel_from_disk:
@@ -101,7 +105,7 @@ class TextMelCollate():
         """Collate's training batch from normalized text and mel-spectrogram
         PARAMS
         ------
-        batch: [text_normalized, mel_normalized]
+        batch: [text_normalized, mel_normalized, len_text, spk_info]
         """
         # Right zero-pad all one-hot text sequences to max input length
         input_lengths, ids_sorted_decreasing = torch.sort(
@@ -111,9 +115,13 @@ class TextMelCollate():
 
         text_padded = torch.LongTensor(len(batch), max_input_len)
         text_padded.zero_()
+        spk_embeddings = torch.FloatTensor(len(batch), 512)
+        spk_embeddings.zero_()
         for i in range(len(ids_sorted_decreasing)):
             text = batch[ids_sorted_decreasing[i]][0]
             text_padded[i, :text.size(0)] = text
+            spk_info = batch[ids_sorted_decreasing[i]][-1]
+            spk_embeddings[i, :spk_info.size(-1)] = spk_info
 
         # Right zero-pad mel-spec
         num_mels = batch[0][1].size(0)
@@ -138,20 +146,23 @@ class TextMelCollate():
         # count number of items - characters in text
         len_x = [x[2] for x in batch]
         len_x = torch.Tensor(len_x)
+
         return text_padded, input_lengths, mel_padded, gate_padded, \
-            output_lengths, len_x
+            output_lengths, len_x, spk_embeddings
 
 
 def batch_to_gpu(batch):
     text_padded, input_lengths, mel_padded, gate_padded, \
-        output_lengths, len_x = batch
+        output_lengths, len_x, spk_embeddings = batch
     text_padded = to_gpu(text_padded).long()
     input_lengths = to_gpu(input_lengths).long()
     max_len = torch.max(input_lengths.data).item()
     mel_padded = to_gpu(mel_padded).float()
     gate_padded = to_gpu(gate_padded).float()
     output_lengths = to_gpu(output_lengths).long()
-    x = (text_padded, input_lengths, mel_padded, max_len, output_lengths)
+    spk_embeddings = to_gpu(spk_embeddings).float()
+    x = (text_padded, input_lengths, mel_padded,
+         max_len, output_lengths, spk_embeddings)
     y = (mel_padded, gate_padded)
     len_x = torch.sum(output_lengths)
     return (x, y, len_x)

@@ -19,8 +19,8 @@ def parse_args(parser):
                         help='output validation metadata')
     return parser
 
-
-_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890<># '
+from tacotron2.text import symbols as _letters
+#_letters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz1234567890<># '
 
 
 def normalize(str, trans_prosody=True, remove_punc=True):

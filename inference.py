@@ -59,6 +59,9 @@ def parse_args(parser):
     parser.add_argument('-sr', '--sampling-rate', default=22050, type=int,
                         help='Sampling rate')
 
+    parser.add_argument('-si', '--speaker-info', type=str, default="speaker-info.npy",
+                        help='full path to the input speaker-info file')
+
     run_mode = parser.add_mutually_exclusive_group()
     run_mode.add_argument('--fp16', action='store_true',
                           help='Run inference with mixed precision')
@@ -137,7 +140,7 @@ def load_and_setup_model(parser, checkpoint, fp16_run, cpu_run, forward_is_infer
 
 
 # taken from tacotron2/data_function.py:TextMelCollate.__call__
-def pad_sequences(batch):
+def pad_sequences(batch, spk_info):
     # Right zero-pad all one-hot text sequences to max input length
     input_lengths, ids_sorted_decreasing = torch.sort(
         torch.LongTensor([len(x) for x in batch]),
@@ -146,14 +149,17 @@ def pad_sequences(batch):
 
     text_padded = torch.LongTensor(len(batch), max_input_len)
     text_padded.zero_()
+
+    spk_embs = []
     for i in range(len(ids_sorted_decreasing)):
         text = batch[ids_sorted_decreasing[i]]
         text_padded[i, :text.size(0)] = text
+        spk_embs.append(spk_info)
 
-    return text_padded, input_lengths
+    return text_padded, input_lengths, spk_embs
 
 
-def prepare_input_sequence(texts, default, cpu_run=False):
+def prepare_input_sequence(texts, default, spk_info, cpu_run=False):
     from merge_metadata import normalize
 
     d = []
@@ -161,15 +167,17 @@ def prepare_input_sequence(texts, default, cpu_run=False):
         d.append(torch.IntTensor(
             text_to_sequence(normalize(text), [default.text_cleaners])[:]))
 
-    text_padded, input_lengths = pad_sequences(d)
+    text_padded, input_lengths = pad_sequences(d, spk_info)
     if not cpu_run:
         text_padded = text_padded.cuda().long()
         input_lengths = input_lengths.cuda().long()
+        spk_embs = spk_embs.cuda().float()
     else:
         text_padded = text_padded.long()
         input_lengths = input_lengths.long()
+        spk_embs = spk_embs.float()
 
-    return text_padded, input_lengths
+    return text_padded, input_lengths, spk_embs
 
 
 class MeasureTime():
@@ -224,23 +232,27 @@ def main():
     if args.include_warmup:
         sequence = torch.randint(low=0, high=148, size=(1, 50)).long()
         input_lengths = torch.IntTensor([sequence.size(1)]).long()
+        spk_embeddings = torch.randfloat(low=-1, high=1, size=(1, 1, 512))
         if not args.cpu:
             sequence = sequence.cuda()
             input_lengths = input_lengths.cuda()
         for i in range(3):
             with torch.no_grad():
-                mels, mel_lengths, _ = tacotron2.infer(sequence, input_lengths)
+                mels, mel_lengths, _ = tacotron2.infer(
+                    sequence, input_lengths, spk_embeddings)
 
     measurements = {}
 
-    sequences_padded, input_lengths = prepare_input_sequence(
-        texts, default, args.cpu)
+    spk_info = np.load(args.speaker_info)
+
+    sequences_padded, input_lengths, spk_embeddings = prepare_input_sequence(
+        texts, default, spk_info, args.cpu)
     DLLogger.log(step="infer", data={
         'sequences_padded': str(sequences_padded.cpu())})
 
     with torch.no_grad(), MeasureTime(measurements, "tacotron2_time", args.cpu):
         mels, mel_lengths, alignments = tacotron2.infer(
-            sequences_padded, input_lengths)
+            sequences_padded, input_lengths, spk_embeddings)
 
     print("Stopping after", mels.size(2), "decoder steps")
     tacotron2_infer_perf = mels.size(

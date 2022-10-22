@@ -7,3 +7,5 @@ test.txt
 test2num.txt
 *.wav
 .vscode
+demo*
+pretrained_models
